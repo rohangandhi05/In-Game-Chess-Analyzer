@@ -389,30 +389,134 @@ class ChessAnalyzer {
         return out;
     }
 
+    /**
+     * Get the number of half-moves (plies) played so far from the DOM.
+     * Uses [data-ply] count as the most reliable indicator — these elements
+     * are present even when their text content uses SVG/image piece icons.
+     */
+    _getPlyCount() {
+        const byPly = document.querySelectorAll('[data-ply]');
+        if (byPly.length > 0) return byPly.length;
+
+        // Fallback: count .node elements inside the move list
+        const nodes = document.querySelectorAll('.vertical-move-list .node');
+        if (nodes.length > 0) return nodes.length;
+
+        return 0;
+    }
+
+    /**
+     * Infer castling availability from current king/rook positions on the board.
+     * This is a best-effort approximation — it will be wrong if a king or rook
+     * moved and returned to its original square, but is correct in the vast
+     * majority of practical positions.
+     */
+    _inferCastling(board) {
+        let rights = '';
+        // White castling: king on e1
+        if (board['e1'] === 'K') {
+            if (board['h1'] === 'R') rights += 'K';
+            if (board['a1'] === 'R') rights += 'Q';
+        }
+        // Black castling: king on e8
+        if (board['e8'] === 'k') {
+            if (board['h8'] === 'r') rights += 'k';
+            if (board['a8'] === 'r') rights += 'q';
+        }
+        return rights || '-';
+    }
+
+    /**
+     * Read piece positions AND castling inference from chess.com's board elements.
+     * Returns { placement, castling, board } or null.
+     */
+    _readBoard() {
+        const pieceEls = document.querySelectorAll('[class*="piece "]');
+        if (pieceEls.length < 2) return null;
+
+        const board = {};
+        for (const el of pieceEls) {
+            const classes = el.className.split(/\s+/);
+            let pieceCode = null, squareCode = null;
+            for (const cls of classes) {
+                if (/^[wb][pnbrqk]$/.test(cls)) pieceCode = cls;
+                if (/^square-[1-8][1-8]$/.test(cls)) squareCode = cls;
+            }
+            if (!pieceCode || !squareCode) continue;
+            const file = parseInt(squareCode[7]);
+            const rank = parseInt(squareCode[8]);
+            const sq = String.fromCharCode(96 + file) + rank;
+            board[sq] = pieceCode[0] === 'w' ? pieceCode[1].toUpperCase() : pieceCode[1];
+        }
+
+        if (Object.keys(board).length < 2) return null;
+
+        const ranks = [];
+        for (let rank = 8; rank >= 1; rank--) {
+            let s = '', empty = 0;
+            for (let file = 1; file <= 8; file++) {
+                const piece = board[String.fromCharCode(96 + file) + rank];
+                if (piece) { if (empty) { s += empty; empty = 0; } s += piece; }
+                else empty++;
+            }
+            if (empty) s += empty;
+            ranks.push(s);
+        }
+
+        return {
+            placement: ranks.join('/'),
+            castling: this._inferCastling(board),
+            board
+        };
+    }
+
     extractFEN() {
         try {
-            if (DEBUG) console.log('🔍 STARTING MOVE EXTRACTION');
-            
             this.gameChess = new Chess();
 
-            // STRATEGY 1: Try to find PGN data in the page
-            let pgnText = null;
-            const pgnElements = document.querySelectorAll('[data-pgn], [class*="pgn"]');
-            for (const el of pgnElements) {
-                if (el.dataset.pgn) {
-                    pgnText = el.dataset.pgn;
-                    if (DEBUG) console.log('✓ Found PGN in data attribute');
-                    break;
-                }
-                if (el.textContent.includes('1.') && el.textContent.includes('[Event')) {
-                    pgnText = el.textContent;
-                    if (DEBUG) console.log('✓ Found PGN in element text');
-                    break;
+            // ── PRIMARY PATH: Read the board directly ──────────────────────────
+            // Chess.com piece elements always have correct CSS classes regardless
+            // of how the move list renders pieces (SVG, image, text, unicode).
+            // This completely bypasses the fragile move-text parsing problem.
+            const boardData = this._readBoard();
+            const plyCount = this._getPlyCount();
+
+            if (boardData && plyCount >= 0) {
+                const turn = (plyCount % 2 === 0) ? 'w' : 'b';
+                const fullMove = Math.floor(plyCount / 2) + 1;
+                const fen = `${boardData.placement} ${turn} ${boardData.castling} - 0 ${fullMove}`;
+
+                // Validate the FEN is legal before using it
+                try {
+                    const test = new Chess(fen);
+                    if (test.moves().length > 0 || test.isGameOver?.() || test.game_over?.()) {
+                        // Get the last move text from the DOM for display only (best effort)
+                        const lastMoveText = this._getLastMoveDisplayText();
+                        if (DEBUG) console.log(`✓ Board FEN: ${fen}`);
+
+                        return {
+                            fen,
+                            lastMove: lastMoveText,
+                            lastMoveDetails: null,
+                            moveNumber: plyCount,
+                            turn,
+                            movesApplied: [],
+                            failedMoves: [],
+                            totalRaw: plyCount
+                        };
+                    }
+                } catch (fenErr) {
+                    console.warn('⚠️ Board FEN invalid, falling back to move replay:', fenErr.message);
                 }
             }
-            
-            if (pgnText) {
-                if (DEBUG) console.log('📜 Extracting moves from PGN');
+
+            // ── FALLBACK: PGN text in DOM (reliable full notation) ─────────────
+            const pgnElements = document.querySelectorAll('[data-pgn], [class*="pgn"]');
+            for (const el of pgnElements) {
+                const pgnText = el.dataset.pgn ||
+                    (el.textContent.includes('1.') && el.textContent.includes('[Event') ? el.textContent : null);
+                if (!pgnText) continue;
+
                 const moveMatches = pgnText.match(/\d+\.\s*([a-zA-Z0-9=+#\-x]+)(?:\s+([a-zA-Z0-9=+#\-x]+))?/g);
                 if (moveMatches) {
                     const pgnMoves = [];
@@ -420,32 +524,51 @@ class ChessAnalyzer {
                         const moves = match.replace(/\d+\.\s*/, '').split(/\s+/);
                         pgnMoves.push(...moves.filter(m => m.length > 0));
                     });
-                    if (DEBUG) console.log(`✓ Extracted ${pgnMoves.length} moves from PGN:`, pgnMoves.join(' '));
-                    return this.processMoveList(pgnMoves);
+                    if (pgnMoves.length > 0) {
+                        if (DEBUG) console.log(`✓ PGN fallback: ${pgnMoves.join(' ')}`);
+                        return this.processMoveList(pgnMoves);
+                    }
                 }
             }
 
-            // STRATEGY 2: Extract moves from DOM, trying selectors in order of reliability.
-            // IMPORTANT: we check processedMoves.length after each attempt, NOT moveElements.length.
-            // A selector can return container elements that all fail validation — we must keep trying.
+            // ── LAST RESORT: Move list text extraction ─────────────────────────
             const processedMoves = this._tryExtractMoves();
-
-            if (DEBUG) console.log(`✓ Processed ${processedMoves.length} valid moves`);
-            if (DEBUG) console.log('📝 Move sequence:', processedMoves.join(' '));
-
             return this.processMoveList(processedMoves);
 
         } catch (error) {
             console.error('❌ CRITICAL ERROR in extractFEN:', error);
             return {
                 fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-                lastMove: null,
-                lastMoveDetails: null,
-                moveNumber: 0,
-                turn: 'w',
-                movesApplied: []
+                lastMove: null, lastMoveDetails: null,
+                moveNumber: 0, turn: 'w', movesApplied: []
             };
         }
+    }
+
+    /**
+     * Get a display string for the last move from the DOM.
+     * Used only for the "Recent Moves" panel — not for game state.
+     * Tolerates failure gracefully.
+     */
+    _getLastMoveDisplayText() {
+        try {
+            // The active/highlighted node is the last played move on chess.com
+            const active = document.querySelector(
+                '[class*="node"][class*="selected"], [class*="move"][class*="selected"], ' +
+                '[class*="node"][class*="active"], [data-ply].selected, [data-ply].active'
+            );
+            if (active) {
+                const text = this._cleanMoveText(active.textContent.trim());
+                if (text && text.length > 0 && text.length <= 10) return text;
+            }
+            // Fallback: last [data-ply] element
+            const allPly = document.querySelectorAll('[data-ply]');
+            if (allPly.length > 0) {
+                const last = allPly[allPly.length - 1];
+                return this._cleanMoveText(last.textContent.trim()) || null;
+            }
+        } catch (e) { /* best effort */ }
+        return null;
     }
 
     /**
@@ -750,78 +873,26 @@ class ChessAnalyzer {
         return uciMove;
     }
 
-    /**
-     * Read piece positions directly from chess.com's board elements.
-     * Returns a FEN piece-placement string (e.g. "rnbqkbnr/pppppppp/...")
-     * This is independent of the move list DOM and works as a reliable change detector.
-     * Note: does NOT include castling rights, en passant, or move counts.
-     */
-    _fenFromBoard() {
-        // Chess.com piece elements have classes like "piece wp square-52"
-        // where 'w'/'b' = color, 'p'/'n'/'b'/'r'/'q'/'k' = type,
-        // and square-XY where X=file(1=a..8=h), Y=rank(1..8)
-        const pieceEls = document.querySelectorAll('[class*="piece "]');
-        if (pieceEls.length < 2) return null;
-
-        const board = {};
-        for (const el of pieceEls) {
-            const classes = el.className.split(/\s+/);
-            let pieceCode = null, squareCode = null;
-            for (const cls of classes) {
-                if (/^[wb][pnbrqk]$/.test(cls)) pieceCode = cls;
-                if (/^square-[1-8][1-8]$/.test(cls)) squareCode = cls;
-            }
-            if (!pieceCode || !squareCode) continue;
-            const file = parseInt(squareCode[7]);
-            const rank = parseInt(squareCode[8]);
-            const sq = String.fromCharCode(96 + file) + rank;
-            board[sq] = pieceCode[0] === 'w' ? pieceCode[1].toUpperCase() : pieceCode[1];
-        }
-
-        if (Object.keys(board).length < 2) return null;
-
-        const ranks = [];
-        for (let rank = 8; rank >= 1; rank--) {
-            let s = '', empty = 0;
-            for (let file = 1; file <= 8; file++) {
-                const piece = board[String.fromCharCode(96 + file) + rank];
-                if (piece) { if (empty) { s += empty; empty = 0; } s += piece; }
-                else empty++;
-            }
-            if (empty) s += empty;
-            ranks.push(s);
-        }
-        return ranks.join('/');
-    }
-
     watchForPositionChanges() {
         let lastFEN = '';
         let lastMoveCount = 0;
         let previousMoveCount = 0;
-        let lastBoardFEN = '';
+        let lastBoardPlacement = '';
 
         const checkPosition = () => {
             const now = Date.now();
-            if (now - this.lastCheckedTime < 200) {
-                return;
-            }
+            if (now - this.lastCheckedTime < 200) return;
             this.lastCheckedTime = now;
 
-            // Quick check: did the board pieces actually change?
-            // This is independent of move list parsing and catches changes
-            // even when the DOM move list hasn't updated yet.
-            const boardFEN = this._fenFromBoard();
-            const boardChanged = boardFEN && boardFEN !== lastBoardFEN;
+            // Quick board-state check independent of move list parsing
+            const boardData = this._readBoard();
+            const boardChanged = boardData && boardData.placement !== lastBoardPlacement;
 
             const positionData = this.extractFEN();
             const currentFEN = positionData.fen;
 
-            // Update board FEN tracker regardless
-            if (boardFEN) lastBoardFEN = boardFEN;
+            if (boardData) lastBoardPlacement = boardData.placement;
 
-            // Detect a change: either the full FEN changed, the move count changed,
-            // OR the board pieces changed but move extraction returned the same FEN
-            // (move list DOM might lag behind the board animation)
             const positionChanged = currentFEN !== lastFEN || positionData.moveNumber !== lastMoveCount;
             const boardOnlyChanged = boardChanged && !positionChanged;
 
