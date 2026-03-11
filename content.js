@@ -92,31 +92,82 @@ class ChessAnalyzer {
         this.overlay.innerHTML = `
             <div class="overlay-header">
                 <span class="overlay-title">🔍 Position Analysis</span>
-                <div class="status-dot waiting"></div>
-            </div>
-            <div class="color-selector" style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; gap: 8px; align-items: center;">
-                <span style="font-size: 11px; color: rgba(255,255,255,0.7);">I'm playing:</span>
-                <button class="color-btn" data-color="w" style="padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">⚪ White</button>
-                <button class="color-btn" data-color="b" style="padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">⚫ Black</button>
-            </div>
-            <div class="move-log-section">
-                <div class="move-log-title">Recent Moves</div>
-                <div class="move-log-items">
-                    <div class="move-log-placeholder">Waiting for moves...</div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="status-dot waiting"></div>
+                    <button id="overlay-hide-btn" title="Hide (press H to toggle)" style="
+                        background: rgba(255,255,255,0.1);
+                        border: 1px solid rgba(255,255,255,0.2);
+                        border-radius: 4px;
+                        color: rgba(255,255,255,0.6);
+                        cursor: pointer;
+                        font-size: 11px;
+                        padding: 3px 8px;
+                        letter-spacing: 0.5px;
+                        transition: all 0.2s ease;
+                    ">Hide</button>
                 </div>
             </div>
-            <div class="best-move-section">
-                <div class="best-move-label">Best Move</div>
-                <div class="best-move-value">--</div>
-                <div class="best-move-eval neutral">Select your color above</div>
-            </div>
-            <div style="padding: 12px; font-size: 10px; font-family: monospace; color: rgba(255,255,255,0.5); border-top: 1px solid rgba(255,255,255,0.1); max-height: 100px; overflow-y: auto; word-break: break-all;" id="debug-fen">
-                FEN: Starting position
+            <div class="overlay-body">
+                <div class="color-selector" style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; gap: 8px; align-items: center;">
+                    <span style="font-size: 11px; color: rgba(255,255,255,0.7);">I'm playing:</span>
+                    <button class="color-btn" data-color="w" style="padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">⚪ White</button>
+                    <button class="color-btn" data-color="b" style="padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">⚫ Black</button>
+                </div>
+                <div class="move-log-section">
+                    <div class="move-log-title">Recent Moves</div>
+                    <div class="move-log-items">
+                        <div class="move-log-placeholder">Waiting for moves...</div>
+                    </div>
+                </div>
+                <div class="best-move-section">
+                    <div class="best-move-label">Best Move</div>
+                    <div class="best-move-value">--</div>
+                    <div class="best-move-eval neutral">Select your color above</div>
+                </div>
+                <div style="padding: 12px; font-size: 10px; font-family: monospace; color: rgba(255,255,255,0.5); border-top: 1px solid rgba(255,255,255,0.1); max-height: 100px; overflow-y: auto; word-break: break-all;" id="debug-fen">
+                    FEN: Starting position
+                </div>
             </div>
         `;
         document.body.appendChild(this.overlay);
-        
-        // Add click handlers for color buttons
+
+        // ── Hide / show toggle ──────────────────────────────────────────────
+        const hideBtn = this.overlay.querySelector('#overlay-hide-btn');
+        const body = this.overlay.querySelector('.overlay-body');
+
+        const setHidden = (hidden) => {
+            if (hidden) {
+                body.style.display = 'none';
+                this.overlay.style.width = 'auto';
+                this.overlay.style.minWidth = '0';
+                hideBtn.textContent = 'Show';
+                this.overlay.title = 'Press H to show analyzer';
+            } else {
+                body.style.display = '';
+                this.overlay.style.width = '';
+                this.overlay.style.minWidth = '';
+                hideBtn.textContent = 'Hide';
+                this.overlay.title = '';
+            }
+        };
+
+        hideBtn.addEventListener('click', () => {
+            const isHidden = body.style.display === 'none';
+            setHidden(!isHidden);
+        });
+
+        // Keyboard shortcut: H to toggle
+        document.addEventListener('keydown', (e) => {
+            // Only trigger if not typing in an input field
+            if (e.key === 'h' || e.key === 'H') {
+                const tag = document.activeElement?.tagName?.toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
+                const isHidden = body.style.display === 'none';
+                setHidden(!isHidden);
+            }
+        });
+
+        // ── Color buttons ───────────────────────────────────────────────────
         const colorButtons = this.overlay.querySelectorAll('.color-btn');
         colorButtons.forEach(btn => {
             btn.addEventListener('click', () => {
