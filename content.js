@@ -449,33 +449,20 @@ class ChessAnalyzer {
     }
 
     /**
-     * Get only the direct text content of an element, ignoring child element text.
-     * Chess.com embeds clocks and annotations in child spans inside move nodes.
-     * Using full textContent picks those up; this function avoids that.
-     */
-    _directText(el) {
-        let text = '';
-        for (const node of el.childNodes) {
-            if (node.nodeType === Node.TEXT_NODE) {
-                text += node.textContent;
-            }
-        }
-        return text.trim() || el.textContent.trim(); // fall back to full text if no direct text
-    }
-
-    /**
      * Clean a raw text string extracted from the DOM into a pure SAN move.
-     * Handles: move numbers, annotations, clocks in all common formats.
+     * Handles: move numbers, annotations, clocks, and unicode piece symbols.
      */
     _cleanMoveText(text) {
         return text
-            .replace(/[!?✓✗★]+/g, '')           // annotations and symbols
-            .replace(/[+#]/g, '')                 // check/checkmate symbols
-            .replace(/\d+:\d+(:\d+)?/g, '')       // clocks: 0:30, 1:23, 1:23:45
-            .replace(/\d+\.\d+s/g, '')            // 0.5s
-            .replace(/\d+m\s*\d+s/g, '')          // 1m 30s
-            .replace(/^\d+\.{1,3}\s*/g, '')       // "1. " or "1... "
-            .replace(/^\d+\s*/g, '')              // leading move numbers
+            .replace(/[♟♙♞♘♝♗♜♖♛♕♚♔]/g, '')  // unicode piece symbols
+            .replace(/[!?✓✗★⏱]+/g, '')           // annotations and symbols
+            .replace(/[+#]/g, '')                  // check/checkmate symbols
+            .replace(/\d+:\d+(:\d+)?/g, '')        // clocks: 0:30, 1:23, 1:23:45
+            .replace(/\d+\.\d+s/g, '')             // 0.5s
+            .replace(/\d+m\s*\d+s/g, '')           // 1m 30s
+            .replace(/^\d+\.{1,3}\s*/g, '')        // "1. " or "1... "
+            .replace(/^\d+\s*/g, '')               // leading move numbers
+            .replace(/\s+/g, '')                   // any remaining whitespace
             .trim();
     }
 
@@ -488,16 +475,18 @@ class ChessAnalyzer {
     _tryExtractMoves() {
         const validMovePattern = /^([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](=[NBRQ])?|O-O(-O)?)$/;
 
-        const parseElements = (elements, useDirectText = false) => {
+        // Always use full textContent — piece letters (Q, N, R, B, K) are often in child
+        // <span> elements on chess.com and would be lost with direct-text-node-only reading.
+        // Clock times ("0:30", "1:23") are stripped by _cleanMoveText instead.
+        const parseElements = (elements) => {
             const moves = [];
             for (const el of elements) {
-                // Use direct text nodes to avoid clock/annotation child elements
-                const raw = useDirectText ? this._directText(el) : el.textContent.trim();
+                const raw = el.textContent.trim();
                 if (!raw || raw === '...') continue;
 
                 const clean = this._cleanMoveText(raw);
 
-                // Length and pattern check on the CLEANED text
+                // Check on the CLEANED text
                 if (!clean || clean.length === 0 || clean.length > 10) continue;
                 if (/^\d+\.?$/.test(clean)) continue; // pure move number
                 if (!validMovePattern.test(clean)) {
@@ -512,18 +501,10 @@ class ChessAnalyzer {
 
         const candidates = [];
 
-        // --- Selector 1: [data-ply] with direct text (avoids clock children) ---
+        // --- Selector 1: [data-ply] — chess.com's half-move nodes ---
         const byPly = document.querySelectorAll('[data-ply]');
         if (byPly.length > 0) {
-            candidates.push({
-                name: '[data-ply] (direct text)',
-                moves: parseElements(byPly, true)
-            });
-            // Also try with full textContent + cleaning as a backup
-            candidates.push({
-                name: '[data-ply] (full text)',
-                moves: parseElements(byPly, false)
-            });
+            candidates.push({ name: '[data-ply]', moves: parseElements(byPly) });
         }
 
         // --- Selector 2: .vertical-move-list .node ---
@@ -531,33 +512,18 @@ class ChessAnalyzer {
         if (verticalList) {
             const nodeSpans = verticalList.querySelectorAll('.node');
             if (nodeSpans.length > 0) {
-                candidates.push({
-                    name: '.vertical-move-list .node (direct)',
-                    moves: parseElements(nodeSpans, true)
-                });
-                candidates.push({
-                    name: '.vertical-move-list .node (full)',
-                    moves: parseElements(nodeSpans, false)
-                });
+                candidates.push({ name: '.vertical-move-list .node', moves: parseElements(nodeSpans) });
             }
-
-            // Also try [class*="move-"] within vertical list
             const moveEls = verticalList.querySelectorAll('[class*="move-"]');
             if (moveEls.length > 0) {
-                candidates.push({
-                    name: '.vertical-move-list [class*="move-"] (direct)',
-                    moves: parseElements(moveEls, true)
-                });
+                candidates.push({ name: '.vertical-move-list [class*="move-"]', moves: parseElements(moveEls) });
             }
         }
 
-        // --- Selector 3: [data-node-id] (another chess.com attribute) ---
+        // --- Selector 3: [data-node-id] ---
         const byNodeId = document.querySelectorAll('[data-node-id]');
         if (byNodeId.length > 0) {
-            candidates.push({
-                name: '[data-node-id] (direct)',
-                moves: parseElements(byNodeId, true)
-            });
+            candidates.push({ name: '[data-node-id]', moves: parseElements(byNodeId) });
         }
 
         // --- Selector 4: generic spans inside any move-list container ---
@@ -565,10 +531,7 @@ class ChessAnalyzer {
         if (moveList) {
             const allSpans = moveList.querySelectorAll('span');
             if (allSpans.length > 0) {
-                candidates.push({
-                    name: 'move-list spans (direct)',
-                    moves: parseElements(allSpans, true)
-                });
+                candidates.push({ name: 'move-list spans', moves: parseElements(allSpans) });
             }
         }
 
@@ -577,7 +540,7 @@ class ChessAnalyzer {
             return [];
         }
 
-        // Pick the candidate with the MOST valid moves
+        // Pick the candidate with the most valid moves
         const best = candidates.reduce((a, b) => a.moves.length >= b.moves.length ? a : b);
 
         if (best.moves.length > 0) {
