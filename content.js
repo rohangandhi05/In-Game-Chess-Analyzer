@@ -1,5 +1,8 @@
 console.log('🔥 Chess Analyzer Content Script loaded:', Date.now());
 
+// Set to true to see verbose per-element extraction logs in the console
+const DEBUG = false;
+
 // Wait for Chess.js to be available
 function waitForChess() {
     if (typeof Chess !== 'undefined') {
@@ -221,10 +224,7 @@ class ChessAnalyzer {
         // Try 1: Standard notation as-is
         try {
             const result = chess.move(moveText, { sloppy: true });
-            if (result) {
-                console.log(`   ✓ Applied as-is: ${moveText} → ${result.san}`);
-                return result;
-            }
+            if (result) return result;
         } catch (e) {
             // Continue to other strategies
         }
@@ -232,7 +232,7 @@ class ChessAnalyzer {
         // Get all legal moves for reference
         const legalMoves = chess.moves({ verbose: true });
         
-        console.log(`   ⚠️ "${moveText}" failed standard parsing, trying alternatives...`);
+        if (DEBUG) console.log(`   ⚠️ "${moveText}" failed standard parsing, trying alternatives...`);
 
         // Try 2: Handle captures - "xd4", "Rxd4", "exd4", "axb5" formats
         if (moveText.includes('x')) {
@@ -240,52 +240,33 @@ class ChessAnalyzer {
             const targetSquare = parts[1];
             const prefix = parts[0];
             
-            console.log(`   📍 Capture detected: "${prefix}x${targetSquare}"`);
-            
-            // Find all captures to target square
             let captures = legalMoves.filter(m => m.to === targetSquare && m.captured);
-            console.log(`   Found ${captures.length} possible captures to ${targetSquare}`);
             
             if (prefix) {
-                // Piece capture like "Rxd4" or "Nxd4"
                 if (/^[NBRQK]/.test(prefix)) {
                     const piece = prefix[0].toLowerCase();
                     captures = captures.filter(m => m.piece === piece);
-                    console.log(`   Filtering by piece ${prefix}: ${captures.length} matches`);
                 }
-                // Pawn capture with file like "exd4" or "axb5"
                 else if (/^[a-h]$/.test(prefix)) {
                     const fromFile = prefix[0];
                     captures = captures.filter(m => m.piece === 'p' && m.from[0] === fromFile);
-                    console.log(`   Filtering by pawn from ${fromFile}-file: ${captures.length} matches`);
                 }
-            } else {
-                // Just "xd4" - no prefix, find ANY capture to that square
-                console.log(`   No prefix, trying any capture to ${targetSquare}`);
             }
             
             if (captures.length > 0) {
-                console.log(`   ✓ Using capture: ${captures[0].san} (${captures[0].from}x${captures[0].to})`);
+                if (DEBUG) console.log(`   ✓ Using capture: ${captures[0].san}`);
                 return chess.move(captures[0].san);
-            } else {
-                console.log(`   ❌ No valid captures found for "${moveText}"`);
             }
         }
 
         // Try 3: Handle castling
         if (moveText.toLowerCase() === 'o-o' || moveText === '0-0') {
             const castling = legalMoves.find(m => m.flags.includes('k'));
-            if (castling) {
-                console.log(`   ✓ Using kingside castle: ${castling.san}`);
-                return chess.move(castling.san);
-            }
+            if (castling) return chess.move(castling.san);
         }
         if (moveText.toLowerCase() === 'o-o-o' || moveText === '0-0-0') {
             const castling = legalMoves.find(m => m.flags.includes('q'));
-            if (castling) {
-                console.log(`   ✓ Using queenside castle: ${castling.san}`);
-                return chess.move(castling.san);
-            }
+            if (castling) return chess.move(castling.san);
         }
 
         // Try 4: Direct square match (for notation like "d4", "e8", "c8")
@@ -293,26 +274,15 @@ class ChessAnalyzer {
             const targetSquare = moveText;
             const moves = legalMoves.filter(m => m.to === targetSquare);
             
-            console.log(`   📍 Square-only notation "${targetSquare}", found ${moves.length} possible moves`);
-            
             if (moves.length > 0) {
-                // Log all possibilities
-                moves.forEach(m => {
-                    const pieceNames = {p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King'};
-                    console.log(`      - ${pieceNames[m.piece]} ${m.from} to ${m.to}: ${m.san}`);
-                });
-                
-                // Priority order: Pawn > Knight > Bishop > Rook > Queen > King
                 const priorityOrder = ['p', 'n', 'b', 'r', 'q', 'k'];
                 for (const piece of priorityOrder) {
                     const move = moves.find(m => m.piece === piece);
                     if (move) {
-                        console.log(`   ✓ Using ${piece === 'p' ? 'pawn' : 'piece'} move: ${move.san} (${move.from}${move.to})`);
+                        if (DEBUG) console.log(`   ✓ Square-only: ${move.san}`);
                         return chess.move(move.san);
                     }
                 }
-            } else {
-                console.log(`   ❌ No legal moves to ${targetSquare}`);
             }
         }
 
@@ -321,14 +291,9 @@ class ChessAnalyzer {
         if (fileDisambig) {
             const fromFile = fileDisambig[1];
             const targetSquare = fileDisambig[2];
-            
-            const moves = legalMoves.filter(m => 
-                m.from[0] === fromFile && 
-                m.to === targetSquare
-            );
-            
+            const moves = legalMoves.filter(m => m.from[0] === fromFile && m.to === targetSquare);
             if (moves.length > 0) {
-                console.log(`   ✓ Using file-disambiguated move: ${moves[0].san}`);
+                if (DEBUG) console.log(`   ✓ File-disambiguated: ${moves[0].san}`);
                 return chess.move(moves[0].san);
             }
         }
@@ -338,19 +303,17 @@ class ChessAnalyzer {
         if (targetMatch) {
             const target = targetMatch[0];
             const moves = legalMoves.filter(m => m.to === target);
-            
             if (moves.length > 0) {
-                console.log(`   ⚠️ Using best-guess move to ${target}: ${moves[0].san}`);
+                if (DEBUG) console.log(`   ⚠️ Best-guess move to ${target}: ${moves[0].san}`);
                 return chess.move(moves[0].san);
             }
         }
 
-        console.log(`   ❌ No valid interpretation found for "${moveText}"`);
+        if (DEBUG) console.log(`   ❌ No valid interpretation found for "${moveText}"`);
         return null;
     }
 
     processMoveList(processedMoves) {
-        console.log('\n🎮 REPLAYING MOVES:');
         let moveCount = 0;
         const movesApplied = [];
         let lastMoveText = null;
@@ -373,30 +336,19 @@ class ChessAnalyzer {
                     captured: result.captured || null,
                     flags: result.flags
                 };
-                
-                console.log(`  ${moveCount}. ✓ ${move} → ${result.san} (${result.from}${result.to})`);
+                if (DEBUG) console.log(`  ${moveCount}. ✓ ${move} → ${result.san}`);
             } else {
-                console.error(`  ❌ Move #${i+1} FAILED: "${move}"`);
+                console.warn(`  ⚠️ Move failed: "${move}" — skipping`);
                 failedMoves.push(move);
-                console.log(`     ⚠️ Continuing with remaining moves...`);
             }
         }
 
         const fen = this.gameChess.fen();
         this.lastMoves = movesApplied;
         
-        console.log('\n📊 FINAL POSITION:');
-        console.log(`   FEN: ${fen}`);
-        console.log(`   Moves applied: ${moveCount}/${processedMoves.length}`);
         if (failedMoves.length > 0) {
-            console.log(`   ⚠️ Failed moves: ${failedMoves.join(', ')}`);
+            console.warn(`⚠️ ${failedMoves.length} move(s) failed: ${failedMoves.join(', ')}`);
         }
-        console.log(`   Turn: ${this.gameChess.turn() === 'w' ? 'White' : 'Black'}`);
-        console.log(`   Legal moves: ${this.gameChess.moves({ verbose: false }).length}`);
-        
-        console.log('\n♟️ BOARD:');
-        console.log(this.gameChess.ascii());
-        console.log('🔍 ═══════════════════════════════════════════\n');
 
         this.updateDebugFEN(fen);
 
@@ -439,32 +391,28 @@ class ChessAnalyzer {
 
     extractFEN() {
         try {
-            console.log('🔍 ═══════════════════════════════════════════');
-            console.log('🔍 STARTING MOVE EXTRACTION');
+            if (DEBUG) console.log('🔍 STARTING MOVE EXTRACTION');
             
             this.gameChess = new Chess();
 
-            let moveElements = [];
-            
             // STRATEGY 1: Try to find PGN data in the page
             let pgnText = null;
             const pgnElements = document.querySelectorAll('[data-pgn], [class*="pgn"]');
             for (const el of pgnElements) {
                 if (el.dataset.pgn) {
                     pgnText = el.dataset.pgn;
-                    console.log('✓ Found PGN in data attribute');
+                    if (DEBUG) console.log('✓ Found PGN in data attribute');
                     break;
                 }
                 if (el.textContent.includes('1.') && el.textContent.includes('[Event')) {
                     pgnText = el.textContent;
-                    console.log('✓ Found PGN in element text');
+                    if (DEBUG) console.log('✓ Found PGN in element text');
                     break;
                 }
             }
             
-            // If we found PGN, extract moves from it
             if (pgnText) {
-                console.log('📜 Extracting moves from PGN');
+                if (DEBUG) console.log('📜 Extracting moves from PGN');
                 const moveMatches = pgnText.match(/\d+\.\s*([a-zA-Z0-9=+#\-x]+)(?:\s+([a-zA-Z0-9=+#\-x]+))?/g);
                 if (moveMatches) {
                     const pgnMoves = [];
@@ -472,111 +420,18 @@ class ChessAnalyzer {
                         const moves = match.replace(/\d+\.\s*/, '').split(/\s+/);
                         pgnMoves.push(...moves.filter(m => m.length > 0));
                     });
-                    console.log(`✓ Extracted ${pgnMoves.length} moves from PGN:`, pgnMoves.join(' '));
-                    
-                    // Process PGN moves
+                    if (DEBUG) console.log(`✓ Extracted ${pgnMoves.length} moves from PGN:`, pgnMoves.join(' '));
                     return this.processMoveList(pgnMoves);
                 }
             }
-            
-            // STRATEGY 2: Extract from DOM
-            console.log('📋 Extracting moves from DOM');
-            
-            // Strategy: Look for move containers that hold complete moves, not fragments
-            const verticalList = document.querySelector('.vertical-move-list');
-            if (verticalList) {
-                console.log('✓ Found vertical move list');
-                // Get move ROWS/CONTAINERS, not individual text fragments
-                const moveRows = verticalList.querySelectorAll('[class*="move-"], .node');
-                moveElements = Array.from(moveRows);
-            }
-            
-            // Alternative: Try to find moves by data attributes
-            if (moveElements.length === 0) {
-                console.log('⚠️ Trying data-ply selector');
-                moveElements = Array.from(document.querySelectorAll('[data-ply]'));
-            }
-            
-            // Fallback: Look for any move-like containers
-            if (moveElements.length === 0) {
-                console.log('⚠️ Using fallback selector');
-                const moveList = document.querySelector('[class*="move-list"], [class*="moveList"]');
-                if (moveList) {
-                    // Get direct children only to avoid fragments
-                    moveElements = Array.from(moveList.children).filter(el => {
-                        return el.textContent.length > 0 && el.textContent.length < 20;
-                    });
-                }
-            }
 
-            console.log(`📋 Found ${moveElements.length} potential move containers`);
+            // STRATEGY 2: Extract moves from DOM, trying selectors in order of reliability.
+            // IMPORTANT: we check processedMoves.length after each attempt, NOT moveElements.length.
+            // A selector can return container elements that all fail validation — we must keep trying.
+            const processedMoves = this._tryExtractMoves();
 
-            const processedMoves = [];
-            const seenTexts = new Set();
-            
-            for (let i = 0; i < moveElements.length; i++) {
-                const el = moveElements[i];
-                
-                // Get the FULL text content from the container, not just immediate text
-                let text = el.textContent.trim();
-                
-                // Show element details for debugging
-                const classList = el.className;
-                const tag = el.tagName;
-                const dataAttrs = Array.from(el.attributes)
-                    .filter(attr => attr.name.startsWith('data-'))
-                    .map(attr => `${attr.name}="${attr.value}"`)
-                    .join(' ');
-                
-                console.log(`  [${i}] <${tag} class="${classList}" ${dataAttrs}> "${text}"`);
-                
-                // Skip obvious non-moves
-                if (/^\d+\.?$/.test(text) || text === '...' || text === '' || text.length > 20) {
-                    console.log(`      ↳ Skipped (move number, empty, or too long)`);
-                    continue;
-                }
-                
-                // Clean the move text more aggressively
-                let cleanMove = text
-                    // Remove annotations
-                    .replace(/[!?]+$/g, '')
-                    .replace(/[+#]$/g, '')
-                    // Remove timestamps like "0.5s" or "1m 30s"
-                    .replace(/\d+\.\d+s/g, '')
-                    .replace(/\d+m\s*\d+s/g, '')
-                    // Remove move numbers with dots
-                    .replace(/^\d+\.+\s*/g, '')
-                    // Remove any remaining numbers at start
-                    .replace(/^\d+\s*/g, '')
-                    .trim();
-                
-                console.log(`      Cleaned: "${text}" → "${cleanMove}"`);
-                
-                if (!cleanMove || cleanMove.length === 0) {
-                    console.log(`      ↳ Skipped (empty after cleaning)`);
-                    continue;
-                }
-                
-                // Validate it looks like a chess move
-                // Valid patterns: e4, Nf3, O-O, exd5, Bxf7+, e8=Q
-                const validMovePattern = /^([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](=[NBRQ])?|O-O(-O)?)$/;
-                if (!validMovePattern.test(cleanMove)) {
-                    console.log(`      ↳ Skipped (doesn't match move pattern)`);
-                    continue;
-                }
-                
-                if (seenTexts.has(cleanMove)) {
-                    console.log(`      ↳ Skipped (duplicate: ${cleanMove})`);
-                    continue;
-                }
-                
-                seenTexts.add(cleanMove);
-                processedMoves.push(cleanMove);
-                console.log(`      ✓ Added as move #${processedMoves.length}: ${cleanMove}`);
-            }
-
-            console.log(`\n✓ Processed ${processedMoves.length} valid moves`);
-            console.log('📝 Move sequence:', processedMoves.join(' '));
+            if (DEBUG) console.log(`✓ Processed ${processedMoves.length} valid moves`);
+            if (DEBUG) console.log('📝 Move sequence:', processedMoves.join(' '));
 
             return this.processMoveList(processedMoves);
 
@@ -591,6 +446,91 @@ class ChessAnalyzer {
                 movesApplied: []
             };
         }
+    }
+
+    /**
+     * Try multiple DOM selectors to extract the move list.
+     * Returns an ordered array of cleaned SAN move strings.
+     * Tries each strategy in turn and stops as soon as one yields valid moves.
+     * NOTE: We check the number of extracted *valid* moves, not raw element count —
+     * container elements can match a selector but still fail validation.
+     */
+    _tryExtractMoves() {
+        const validMovePattern = /^([NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](=[NBRQ])?|O-O(-O)?)$/;
+
+        const cleanMove = (text) => text
+            .replace(/[!?]+$/g, '')
+            .replace(/[+#]$/g, '')
+            .replace(/\d+\.\d+s/g, '')
+            .replace(/\d+m\s*\d+s/g, '')
+            .replace(/^\d+\.+\s*/g, '')
+            .replace(/^\d+\s*/g, '')
+            .trim();
+
+        const parseElements = (elements) => {
+            const moves = [];
+            for (const el of elements) {
+                const text = el.textContent.trim();
+                if (!text || /^\d+\.?$/.test(text) || text === '...' || text.length > 20) continue;
+                const clean = cleanMove(text);
+                if (!clean || !validMovePattern.test(clean)) {
+                    if (DEBUG) console.log(`  skip: "${text}" → "${clean}"`);
+                    continue;
+                }
+                if (DEBUG) console.log(`  ✓ move: "${clean}"`);
+                moves.push(clean);
+            }
+            return moves;
+        };
+
+        // Attempt 1: [data-ply] — chess.com's individual half-move nodes (most reliable)
+        const byPly = document.querySelectorAll('[data-ply]');
+        if (byPly.length > 0) {
+            const moves = parseElements(byPly);
+            if (moves.length > 0) {
+                if (DEBUG) console.log(`✓ Got ${moves.length} moves from [data-ply]`);
+                return moves;
+            }
+        }
+
+        // Attempt 2: .vertical-move-list leaf nodes (the .node spans inside the list)
+        const verticalList = document.querySelector('.vertical-move-list');
+        if (verticalList) {
+            // Query for .node spans — these are the leaf text nodes, not row containers
+            const nodeSpans = verticalList.querySelectorAll('.node');
+            if (nodeSpans.length > 0) {
+                const moves = parseElements(nodeSpans);
+                if (moves.length > 0) {
+                    if (DEBUG) console.log(`✓ Got ${moves.length} moves from .vertical-move-list .node`);
+                    return moves;
+                }
+            }
+            // If .node gave nothing, try any element inside the list
+            const allChildren = verticalList.querySelectorAll('[class*="move-"]');
+            if (allChildren.length > 0) {
+                const moves = parseElements(allChildren);
+                if (moves.length > 0) {
+                    if (DEBUG) console.log(`✓ Got ${moves.length} moves from .vertical-move-list [class*="move-"]`);
+                    return moves;
+                }
+            }
+        }
+
+        // Attempt 3: generic move-list container, direct children only
+        const moveList = document.querySelector('[class*="move-list"], [class*="moveList"]');
+        if (moveList) {
+            const children = Array.from(moveList.children).filter(el =>
+                el.textContent.length > 0 && el.textContent.length < 20
+            );
+            const moves = parseElements(children);
+            if (moves.length > 0) {
+                if (DEBUG) console.log(`✓ Got ${moves.length} moves from generic move-list`);
+                return moves;
+            }
+        }
+
+        if (DEBUG) console.log('⚠️ No moves found by any selector');
+        return [];
     }
 
     isGameOver(chessInstance) {
@@ -615,65 +555,32 @@ class ChessAnalyzer {
         this.currentAnalysisId++;
         const analysisId = this.currentAnalysisId;
 
-        console.log(`\n🎯 ═══════════════════════════════════════════`);
-        console.log(`🎯 ANALYSIS #${analysisId} STARTING`);
-        console.log(`🎯 FEN: ${fen}`);
-        console.log(`🎯 Your color setting: ${this.myColor === null ? 'NOT SET' : (this.myColor === 'w' ? 'WHITE' : 'BLACK')}`);
-        console.log(`🎯 Color detected: ${this.colorDetected ? 'YES' : 'NO'}`);
-
         let testChess;
         try {
             testChess = new Chess(fen);
             const currentTurn = testChess.turn();
-            console.log(`✓ FEN is valid`);
-            console.log(`  Turn: ${currentTurn === 'w' ? 'White' : 'Black'} to move`);
-            console.log(`  Move count: ${moveNumber}`);
-            console.log(`  Your color: ${this.myColor === 'w' ? 'White' : this.myColor === 'b' ? 'Black' : 'NULL'}`);
-            console.log(`  Comparison: currentTurn(${currentTurn}) === myColor(${this.myColor}) ? ${currentTurn === this.myColor}`);
-            
-            // Color detection logic
-            console.log(`\n🔍 TURN CHECK DETAILS:`);
-            console.log(`  this.colorDetected = ${this.colorDetected}`);
-            console.log(`  this.myColor = ${this.myColor} (type: ${typeof this.myColor})`);
-            console.log(`  currentTurn = ${currentTurn} (type: ${typeof currentTurn})`);
-            console.log(`  this.myColor !== null = ${this.myColor !== null}`);
-            console.log(`  currentTurn === this.myColor = ${currentTurn === this.myColor}`);
-            
+
             if (this.colorDetected && this.myColor !== null) {
-                console.log(`✓ Color is set, checking turn...`);
-                
-                // We know your color - only analyze on your turn
-                if (currentTurn === this.myColor) {
-                    console.log(`✅ IT'S YOUR TURN! Analyzing...`);
-                    console.log(`   Your color: ${this.myColor === 'w' ? 'White' : 'Black'}`);
-                    console.log(`   Current turn: ${currentTurn === 'w' ? 'White' : 'Black'}`);
-                } else {
-                    console.log(`⏸️ NOT YOUR TURN - Skipping`);
-                    console.log(`   Your color: ${this.myColor === 'w' ? 'White' : 'Black'}`);
-                    console.log(`   Current turn: ${currentTurn === 'w' ? 'White' : 'Black'}`);
+                if (currentTurn !== this.myColor) {
                     this.updateStatus('waiting');
                     this.updateBestMove('--', 'Opponent\'s Turn', 'neutral');
                     this.isAnalyzing = false;
                     return;
                 }
             } else {
-                // Color not selected yet
-                console.log(`⚠️ COLOR NOT SET!`);
-                console.log(`   Please click White or Black button`);
                 this.updateBestMove('--', 'Select your color', 'neutral');
                 this.isAnalyzing = false;
                 return;
             }
             
-            console.log(`  Legal moves: ${testChess.moves({ verbose: false }).join(', ')}`);
-            
             if (this.isGameOver(testChess)) {
-                console.log('⚠️ Game over - skipping analysis');
                 this.updateBestMove('--', 'Game Over', 'neutral');
                 this.updateStatus('waiting');
                 this.isAnalyzing = false;
                 return;
             }
+
+            console.log(`🎯 Analyzing move ${moveNumber} | FEN: ${fen}`);
         } catch (e) {
             console.error('❌ Invalid FEN:', fen, e);
             this.updateBestMove('--', 'Invalid Position', 'neutral');
@@ -682,18 +589,12 @@ class ChessAnalyzer {
             return;
         }
 
-        if (this.pendingAnalysis) {
-            console.log('🛑 Canceling previous analysis');
-        }
-
         this.isAnalyzing = true;
         this.updateStatus('analyzing');
         this.updateBestMove('--', 'Analyzing...', 'neutral');
 
         try {
-            // FIX: Properly wrap chrome.runtime.sendMessage in a Promise
             const response = await new Promise((resolve, reject) => {
-                // Check if extension context is still valid
                 if (!chrome.runtime?.id) {
                     reject(new Error('Extension context lost - please reload the page'));
                     return;
@@ -703,10 +604,9 @@ class ChessAnalyzer {
                     action: 'analyze',
                     fen: fen,
                     depth: 12,
-                    lines: 1
+                    lines: 3
                 }, (response) => {
                     if (chrome.runtime.lastError) {
-                        // Extension was reloaded or context lost
                         reject(new Error('Extension connection lost - please reload the page'));
                     } else {
                         resolve(response);
@@ -715,7 +615,7 @@ class ChessAnalyzer {
             });
 
             if (analysisId !== this.currentAnalysisId) {
-                console.log(`⏭️ Analysis #${analysisId} outdated (current: #${this.currentAnalysisId})`);
+                if (DEBUG) console.log(`⏭️ Analysis #${analysisId} outdated, discarding`);
                 return;
             }
 
@@ -726,15 +626,6 @@ class ChessAnalyzer {
             } else if (response.moves && response.moves.length > 0) {
                 const bestMove = response.moves[0];
                 console.log(`✅ Best move: ${bestMove.move} (${bestMove.score})`);
-                
-                const legalMoves = testChess.moves({ verbose: true });
-                const uciMove = bestMove.move;
-                const from = uciMove.substring(0, 2);
-                const to = uciMove.substring(2, 4);
-                
-                const isLegal = legalMoves.some(m => m.from === from && m.to === to);
-                console.log(`   Is legal? ${isLegal ? '✓ YES' : '❌ NO'}`);
-                
                 this.displayAnalysis(response.moves);
                 this.updateStatus('ready');
             } else {
@@ -856,16 +747,10 @@ class ChessAnalyzer {
             const currentFEN = positionData.fen;
 
             if (currentFEN !== lastFEN || positionData.moveNumber !== lastMoveCount) {
-                console.log('\n🔄 ═══════════════════════════════════════════');
-                console.log('🔄 POSITION CHANGED');
-                console.log(`   Moves: ${lastMoveCount} → ${positionData.moveNumber}`);
-                
                 let playerName = 'Unknown';
                 if (positionData.moveNumber > lastMoveCount) {
                     const isWhiteToMove = positionData.turn === 'w';
                     playerName = isWhiteToMove ? 'Black' : 'White';
-
-                    console.log(`   Last move by ${playerName}: ${positionData.lastMove || '?'}`);
 
                     if (positionData.lastMoveDetails) {
                         const readableMove = this.formatMoveReadable(positionData.lastMoveDetails);
@@ -873,14 +758,14 @@ class ChessAnalyzer {
                     } else if (positionData.lastMove) {
                         this.updateMoveLog(positionData.lastMove, playerName, Date.now());
                     }
+
+                    console.log(`🔄 ${playerName} played ${positionData.lastMove || '?'} (move ${positionData.moveNumber})`);
                 }
 
                 previousMoveCount = lastMoveCount;
                 lastFEN = currentFEN;
                 lastMoveCount = positionData.moveNumber;
                 this.currentFEN = currentFEN;
-
-                console.log('🔄 ═══════════════════════════════════════════\n');
 
                 this.analyzePosition(currentFEN, positionData.moveNumber);
             }

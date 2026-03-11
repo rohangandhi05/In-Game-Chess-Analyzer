@@ -125,6 +125,7 @@ function analyze(fen, depth, lines) {
         
         const timeout = setTimeout(() => {
             console.warn('⚠️ Analysis timeout');
+            clearInterval(checkDepth); // prevent orphaned interval
             if (!hasReturned) {
                 hasReturned = true;
                 resolve(currentAnalysis.moves.filter(Boolean));
