@@ -91,27 +91,17 @@ class ChessAnalyzer {
         this.overlay.id = 'chess-overlay';
         this.overlay.innerHTML = `
             <div class="overlay-header">
-                <span class="overlay-title">🔍 Position Analysis</span>
-                <div style="display:flex; align-items:center; gap:10px;">
+                <span class="overlay-title">♟ Analysis</span>
+                <div style="display:flex; align-items:center; gap:8px;">
                     <div class="status-dot waiting"></div>
-                    <button id="overlay-hide-btn" title="Hide (press H to toggle)" style="
-                        background: rgba(255,255,255,0.1);
-                        border: 1px solid rgba(255,255,255,0.2);
-                        border-radius: 4px;
-                        color: rgba(255,255,255,0.6);
-                        cursor: pointer;
-                        font-size: 11px;
-                        padding: 3px 8px;
-                        letter-spacing: 0.5px;
-                        transition: all 0.2s ease;
-                    ">Hide</button>
+                    <button id="overlay-hide-btn" title="Hide (H)">Hide</button>
                 </div>
             </div>
             <div class="overlay-body">
-                <div class="color-selector" style="padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; gap: 8px; align-items: center;">
-                    <span style="font-size: 11px; color: rgba(255,255,255,0.7);">I'm playing:</span>
-                    <button class="color-btn" data-color="w" style="padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">⚪ White</button>
-                    <button class="color-btn" data-color="b" style="padding: 6px 12px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; color: white; cursor: pointer; font-size: 11px;">⚫ Black</button>
+                <div class="color-selector">
+                    <span class="color-label">Playing as</span>
+                    <button class="color-btn" data-color="w">⚪ White</button>
+                    <button class="color-btn" data-color="b">⚫ Black</button>
                 </div>
                 <div class="move-log-section">
                     <div class="move-log-title">Recent Moves</div>
@@ -123,9 +113,6 @@ class ChessAnalyzer {
                     <div class="best-move-label">Best Move</div>
                     <div class="best-move-value">--</div>
                     <div class="best-move-eval neutral">Select your color above</div>
-                </div>
-                <div style="padding: 12px; font-size: 10px; font-family: monospace; color: rgba(255,255,255,0.5); border-top: 1px solid rgba(255,255,255,0.1); max-height: 100px; overflow-y: auto; word-break: break-all;" id="debug-fen">
-                    FEN: Starting position
                 </div>
             </div>
         `;
@@ -203,12 +190,6 @@ class ChessAnalyzer {
         }
     }
 
-    updateDebugFEN(fen) {
-        const debugDiv = document.getElementById('debug-fen');
-        if (debugDiv) {
-            debugDiv.textContent = `FEN: ${fen}`;
-        }
-    }
 
     updateMoveLog(move, player, timestamp) {
         this.moveHistory.push({
@@ -400,8 +381,6 @@ class ChessAnalyzer {
         if (failedMoves.length > 0) {
             console.warn(`⚠️ ${failedMoves.length} move(s) failed: ${failedMoves.join(', ')}`);
         }
-
-        this.updateDebugFEN(fen);
 
         return {
             fen: fen,
