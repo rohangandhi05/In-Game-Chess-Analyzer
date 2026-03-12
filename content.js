@@ -1,17 +1,13 @@
-console.log('🔥 Chess Analyzer Content Script loaded:', Date.now());
-
 // Set to true to see verbose per-element extraction logs in the console
 const DEBUG = false;
 
 // Wait for Chess.js to be available
 function waitForChess() {
     if (typeof Chess !== 'undefined') {
-        console.log('✓ Chess constructor found');
         initializeAnalyzer();
         return;
     }
 
-    console.log('⏳ Waiting for Chess constructor...');
     let attempts = 0;
     const maxAttempts = 50;
 
@@ -19,7 +15,6 @@ function waitForChess() {
         attempts++;
 
         if (typeof Chess !== 'undefined') {
-            console.log('✓ Chess constructor available after', attempts * 100, 'ms');
             clearInterval(checkInterval);
             initializeAnalyzer();
         } else if (attempts >= maxAttempts) {
@@ -73,14 +68,12 @@ class ChessAnalyzer {
         this.colorDetected = false;
         this.waitingForFirstMove = true;
 
-        console.log('♟️ Chess Analyzer initializing...');
         this.init();
     }
 
     init() {
         this.createOverlay();
         this.watchForPositionChanges();
-        console.log('✓ Chess Analyzer ready - select your color using the buttons in the overlay');
     }
 
     createOverlay() {
@@ -171,7 +164,6 @@ class ChessAnalyzer {
                 // Set color
                 this.myColor = color;
                 this.colorDetected = true;
-                console.log(`🎯 Set your color to: ${color === 'w' ? 'WHITE' : 'BLACK'}`);
                 this.updateBestMove('--', `You are ${color === 'w' ? 'White' : 'Black'}`, 'neutral');
                 
                 // Trigger immediate analysis
@@ -180,7 +172,6 @@ class ChessAnalyzer {
             });
         });
         
-        console.log('✓ Overlay created');
     }
 
     updateStatus(statusClass) {
@@ -399,7 +390,6 @@ class ChessAnalyzer {
      * @returns {{ ok: boolean, applied: number, total: number, failed: string[], fen: string, summary: string }}
      */
     runParseCheck() {
-        console.log('🔍 Running parse check...');
         const result = this.extractFEN();
         const failed = result.failedMoves || [];
         const total = result.totalRaw ?? result.movesApplied?.length ?? 0;
@@ -415,7 +405,6 @@ class ChessAnalyzer {
             fen: result.fen,
             summary
         };
-        console.log('Parse check result:', out);
         return out;
     }
 
@@ -752,7 +741,6 @@ class ChessAnalyzer {
                 return;
             }
 
-            console.log(`🎯 Analyzing move ${moveNumber} | FEN: ${fen}`);
         } catch (e) {
             console.error('❌ Invalid FEN:', fen, e);
             this.updateBestMove('--', 'Invalid Position', 'neutral');
@@ -848,7 +836,6 @@ class ChessAnalyzer {
             }
         }
         
-        console.log(`🎯 ═══════════════════════════════════════════\n`);
     }
 
     displayAnalysis(moves) {
@@ -952,7 +939,6 @@ class ChessAnalyzer {
                 // The board pieces moved but the move list DOM didn't update yet.
                 // This can happen when the move list lags behind the board animation.
                 // Force a re-check on the next tick to pick up the move list update.
-                console.log('⚡ Board changed but move list not updated yet — retrying shortly');
                 this.lastCheckedTime = 0; // bypass the 200ms gate on next call
             }
         };
@@ -970,7 +956,6 @@ class ChessAnalyzer {
                 childList: true,
                 subtree: true
             });
-            console.log('✓ Position monitoring started');
         }, 1000);
 
         setTimeout(checkPosition, 1000);

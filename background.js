@@ -1,17 +1,14 @@
-// Chess Analyzer Background Service Worker (Manifest V3 Compatible)
-console.log('♟️ Chess Analyzer Background Worker started');
+// Chess Analyzer Background Service Worker (Manifest V3)
 
 let analysisQueue = [];
 let offscreenReady = false;
 
-// Create offscreen document to run Stockfish (Web Workers don't work in service workers)
 async function setupOffscreenDocument() {
     const existingContexts = await chrome.runtime.getContexts({
         contextTypes: ['OFFSCREEN_DOCUMENT']
     });
 
     if (existingContexts.length > 0) {
-        console.log('✓ Offscreen document already exists');
         offscreenReady = true;
         return;
     }
@@ -23,20 +20,16 @@ async function setupOffscreenDocument() {
             justification: 'Run Stockfish chess engine in a Web Worker'
         });
         offscreenReady = true;
-        console.log('✓ Offscreen document created for Stockfish');
     } catch (error) {
-        console.error('❌ Failed to create offscreen document:', error);
+        console.error('Failed to create offscreen document:', error);
         throw error;
     }
 }
 
-// Handle messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('📨 Received:', request.action);
-
     if (request.action === 'analyze') {
         handleAnalyzeRequest(request, sendResponse);
-        return true; // Async response
+        return true;
     }
 
     if (request.action === 'analysis-complete') {
@@ -55,15 +48,8 @@ async function handleAnalyzeRequest(request, sendResponse) {
         await setupOffscreenDocument();
 
         const requestId = Date.now() + Math.random();
-        
-        // Store callback
-        analysisQueue.push({
-            id: requestId,
-            callback: sendResponse
-        });
+        analysisQueue.push({ id: requestId, callback: sendResponse });
 
-
-        // Forward to offscreen document
         chrome.runtime.sendMessage({
             target: 'offscreen',
             action: 'analyze',
@@ -74,7 +60,7 @@ async function handleAnalyzeRequest(request, sendResponse) {
         });
 
     } catch (error) {
-        console.error('❌ Analysis error:', error);
+        console.error('Analysis request failed:', error);
         sendResponse({ error: error.message });
     }
 }
@@ -82,11 +68,9 @@ async function handleAnalyzeRequest(request, sendResponse) {
 function handleAnalysisComplete(data) {
     const request = analysisQueue.find(r => r.id === data.id);
     if (request) {
-        console.log('✅ Analysis complete:', data.moves.length, 'moves');
         request.callback({ moves: data.moves });
         analysisQueue = analysisQueue.filter(r => r.id !== data.id);
     }
 }
 
-// Initialize
 setupOffscreenDocument().catch(console.error);

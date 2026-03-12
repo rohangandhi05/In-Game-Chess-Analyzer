@@ -1,37 +1,25 @@
-// Offscreen Document - Runs Stockfish in a Web Worker
-console.log('🔧 Offscreen document loaded');
+// Offscreen Document — runs Stockfish in a Web Worker
 
 let stockfish = null;
 let currentAnalysis = { moves: [], depth: 0 };
 let analysisCallback = null;
 let isInitialized = false;
 
-// Initialize Stockfish
 function initStockfish() {
-    if (stockfish) {
-        console.log('✓ Stockfish already initialized');
-        return;
-    }
-
-    console.log('🚀 Initializing Stockfish...');
+    if (stockfish) return;
 
     try {
         const stockfishUrl = chrome.runtime.getURL('stockfish.js');
         stockfish = new Worker(stockfishUrl);
 
         stockfish.onerror = (error) => {
-            console.error('❌ Stockfish error:', error);
+            console.error('Stockfish worker error:', error);
         };
 
         stockfish.onmessage = (event) => {
             const line = event.data;
 
-            if (line === 'uciok') {
-                console.log('✓ UCI initialized');
-            }
-
             if (line === 'readyok') {
-                console.log('✓ Stockfish ready');
                 isInitialized = true;
             }
 
@@ -44,26 +32,20 @@ function initStockfish() {
                 }
             }
 
-            // what is the credit use for this work???
-
             if (line.startsWith('bestmove') && analysisCallback) {
                 const validMoves = currentAnalysis.moves.filter(Boolean);
-                console.log('✅ Analysis done:', validMoves.length, 'moves');
                 analysisCallback(validMoves);
                 analysisCallback = null;
             }
         };
 
-        // Initialize UCI
         stockfish.postMessage('uci');
         stockfish.postMessage('setoption name MultiPV value 3');
         stockfish.postMessage('setoption name Threads value 2');
         stockfish.postMessage('isready');
 
-        console.log('✓ Stockfish initialization started');
-
     } catch (error) {
-        console.error('❌ Failed to init Stockfish:', error);
+        console.error('Failed to initialize Stockfish:', error);
     }
 }
 
@@ -73,9 +55,7 @@ function parseInfoLine(line) {
     const scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
     const pvMovesMatch = line.match(/ pv (.+)/);
 
-    if (!depthMatch || !pvMatch || !scoreMatch || !pvMovesMatch) {
-        return null;
-    }
+    if (!depthMatch || !pvMatch || !scoreMatch || !pvMovesMatch) return null;
 
     const depth = parseInt(depthMatch[1]);
     const pvIndex = parseInt(pvMatch[1]);
@@ -92,12 +72,11 @@ function parseInfoLine(line) {
     } else {
         const cp = scoreValue / 100;
         score = cp >= 0 ? `+${cp.toFixed(1)}` : cp.toFixed(1);
-
-        if (cp > 2) scoreClass = 'winning';
+        if (cp > 2)        scoreClass = 'winning';
         else if (cp > 0.5) scoreClass = 'positive';
         else if (cp > -0.5) scoreClass = 'neutral';
-        else if (cp > -2) scoreClass = 'negative';
-        else scoreClass = 'losing';
+        else if (cp > -2)  scoreClass = 'negative';
+        else               scoreClass = 'losing';
     }
 
     return {
@@ -111,26 +90,21 @@ function parseInfoLine(line) {
 }
 
 function analyze(fen, depth, lines) {
-    console.log(`🔍 Analyzing: depth=${depth}, lines=${lines}`);
-
-    if (!stockfish) {
-        initStockfish();
-    }
+    if (!stockfish) initStockfish();
 
     currentAnalysis = { moves: [], depth: 0 };
 
     return new Promise((resolve) => {
         let hasReturned = false;
-        const minDepth = 8; // Return results as soon as we hit depth 8 for speed
-        
+        const minDepth = 8;
+
         const timeout = setTimeout(() => {
-            console.warn('⚠️ Analysis timeout');
-            clearInterval(checkDepth); // prevent orphaned interval
+            clearInterval(checkDepth);
             if (!hasReturned) {
                 hasReturned = true;
                 resolve(currentAnalysis.moves.filter(Boolean));
             }
-        }, 20000); // Reduced timeout to 20 seconds
+        }, 20000);
 
         analysisCallback = (moves) => {
             if (!hasReturned) {
@@ -140,19 +114,15 @@ function analyze(fen, depth, lines) {
             }
         };
 
-        // Check if we should return early (at lower depth for speed)
         const checkDepth = setInterval(() => {
-            if (currentAnalysis.depth >= minDepth && 
-                currentAnalysis.moves.length >= lines && 
+            if (currentAnalysis.depth >= minDepth &&
+                currentAnalysis.moves.length >= lines &&
                 !hasReturned) {
-                console.log(`⚡ Quick result at depth ${currentAnalysis.depth}`);
                 clearInterval(checkDepth);
-                if (!hasReturned) {
-                    hasReturned = true;
-                    clearTimeout(timeout);
-                    resolve(currentAnalysis.moves.filter(Boolean));
-                    stockfish.postMessage('stop'); // Stop analysis since we have enough
-                }
+                hasReturned = true;
+                clearTimeout(timeout);
+                resolve(currentAnalysis.moves.filter(Boolean));
+                stockfish.postMessage('stop');
             }
         }, 100);
 
@@ -163,16 +133,12 @@ function analyze(fen, depth, lines) {
     });
 }
 
-// Listen for messages from background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.target !== 'offscreen') return;
-
-    console.log('📨 Offscreen received:', request.action);
 
     if (request.action === 'analyze') {
         analyze(request.fen, request.depth, request.lines)
             .then(moves => {
-                // Send result back to background script
                 chrome.runtime.sendMessage({
                     action: 'analysis-complete',
                     id: request.id,
@@ -191,5 +157,4 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
-// Initialize on load
 initStockfish();

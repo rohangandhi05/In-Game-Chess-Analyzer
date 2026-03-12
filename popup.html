@@ -3,62 +3,112 @@
 <head>
   <meta charset="UTF-8">
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      width: 300px;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      width: 260px;
+      background: #0f0f14;
       color: white;
-      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 16px;
     }
-    
-    h1 {
-      font-size: 20px;
-      margin: 0 0 10px 0;
-      text-align: center;
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
     }
-    
-    .status {
-      background: rgba(255, 255, 255, 0.2);
-      padding: 10px;
-      border-radius: 8px;
-      text-align: center;
-      margin-bottom: 12px;
-      font-size: 13px;
+
+    .header-icon {
+      font-size: 22px;
     }
-    
-    .info {
-      font-size: 12px;
-      line-height: 1.5;
-      opacity: 0.9;
+
+    .header-text h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.9);
     }
-    
-    .warning {
-      background: rgba(255, 255, 255, 0.15);
-      padding: 12px;
-      border-radius: 8px;
-      margin-top: 12px;
+
+    .header-text p {
       font-size: 11px;
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: rgba(255,255,255,0.35);
+      margin-top: 2px;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.07);
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 12px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #444;
+      flex-shrink: 0;
+    }
+
+    .status-dot.active   { background: #4caf50; box-shadow: 0 0 6px rgba(76,175,80,0.5); }
+    .status-dot.inactive { background: #ff9800; }
+
+    .tip {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      line-height: 1.6;
+      padding: 0 2px;
+      margin-bottom: 12px;
+    }
+
+    .tip strong {
+      color: rgba(255,255,255,0.5);
+      font-weight: 600;
+    }
+
+    .warning {
+      font-size: 10px;
+      color: rgba(255,255,255,0.25);
+      line-height: 1.5;
+      padding: 9px 11px;
+      border-radius: 7px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.03);
     }
   </style>
 </head>
 <body>
-  <h1>♟️ Chess Analyzer</h1>
-  
-  <div class="status" id="status">
-    Real-time analysis active
+  <div class="header">
+    <div class="header-icon">♟</div>
+    <div class="header-text">
+      <h1>Chess Analyzer</h1>
+      <p>Stockfish · chess.com</p>
+    </div>
   </div>
-  
-  <div class="info">
-    <p><strong>Status:</strong> Monitoring chess.com</p>
-    <p>The analyzer will automatically show best moves when it's your turn.</p>
+
+  <div class="status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Checking...</span>
   </div>
-  
+
+  <div class="tip">
+    Select <strong>White</strong> or <strong>Black</strong> on the overlay to start.<br>
+    Press <strong>H</strong> to quickly hide the panel.
+  </div>
+
   <div class="warning">
-    ⚠️ <strong>Warning:</strong> This is for educational purposes only. Using engines during rated games violates Terms of Service.
+    ⚠ For educational use only. Using engine assistance in rated games violates chess.com's Terms of Service.
   </div>
-  
+
   <script src="popup.js"></script>
 </body>
 </html>
