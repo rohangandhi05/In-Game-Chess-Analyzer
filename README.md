@@ -5,6 +5,16 @@
 
 ---
 
+## Demo
+
+| | | |
+|:---:|:---:|:---:|
+| ![Overlay on Chess.com](icons/rsz_screenshot_2026-03-11_at_60905%20pm.png) | ![Analysis in action](icons/rsz_screenshot_2026-03-11_at_60942%20pm.png) | ![Best move & evaluation](icons/rsz_screenshot_2026-03-11_at_61629%20pm.png) |
+
+*Screenshots: overlay on a Chess.com game, analysis panel, and best-move display.*
+
+---
+
 ## Overview
 
 Chess Real-Time Analyzer is a **Chrome extension** (Manifest V3) for [Chess.com](https://www.chess.com) that:
