@@ -9,7 +9,7 @@
 
 | | | |
 |:---:|:---:|:---:|
-| ![Overlay on Chess.com](icons/rsz_screenshot_2026-03-11_at_60905%20pm.png) | ![Analysis in action](icons/rsz_screenshot_2026-03-11_at_60942%20pm.png) | ![Best move & evaluation](icons/rsz_screenshot_2026-03-11_at_61629%20pm.png) |
+| ![Overlay on Chess.com](icons/demo-1.png) | ![Analysis in action](icons/demo-2.png) | ![Best move & evaluation](icons/demo-3.png) |
 
 *Screenshots: overlay on a Chess.com game, analysis panel, and best-move display.*
 
@@ -62,7 +62,7 @@ The popup (clicking the extension icon) shows a simple status and a reminder abo
 ---
 
 ## High-level internals (for developers)
-
+git 
 - **Content script (`content.js`)** injects the overlay, reads the board state and game info from the Chess.com page, and requests analysis when it’s your turn.
 - **Background service worker (`background.js`)** manages an offscreen document that can host a Web Worker under Manifest V3.
 - **Offscreen page (`offscreen.html` + `offscreen.js`)** runs **Stockfish** (via `stockfish.js` as a Web Worker) and returns best moves and scores to the content script.
