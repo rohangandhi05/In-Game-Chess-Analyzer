@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Chess Real-Time Analyzer",
   "version": "1.0.0",
-  "description": "Real-time Stockfish-powered move suggestions while you play on chess.com. Analysis runs entirely on your device — no data is sent anywhere. Press H to quickly hide the overlay.",
+  "description": "Real-time locally-running Stockfish-powered move suggestions while you play on chess.com.",
   "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
