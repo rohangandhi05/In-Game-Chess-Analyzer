@@ -59,14 +59,11 @@ class ChessAnalyzer {
         this.currentFEN = '';
         this.gameChess = null;
         this.isAnalyzing = false;
-        this.lastMoves = [];
         this.moveHistory = [];
         this.currentAnalysisId = 0;
-        this.pendingAnalysis = null;
         this.lastCheckedTime = 0;
         this.myColor = null;
         this.colorDetected = false;
-        this.waitingForFirstMove = true;
 
         this.init();
     }
@@ -367,7 +364,6 @@ class ChessAnalyzer {
         }
 
         const fen = this.gameChess.fen();
-        this.lastMoves = movesApplied;
         
         if (failedMoves.length > 0) {
             console.warn(`⚠️ ${failedMoves.length} move(s) failed: ${failedMoves.join(', ')}`);
@@ -832,7 +828,6 @@ class ChessAnalyzer {
         } finally {
             if (analysisId === this.currentAnalysisId) {
                 this.isAnalyzing = false;
-                this.pendingAnalysis = null;
             }
         }
         

@@ -1,7 +1,6 @@
 // Chess Analyzer Background Service Worker (Manifest V3)
 
 let analysisQueue = [];
-let offscreenReady = false;
 
 async function setupOffscreenDocument() {
     const existingContexts = await chrome.runtime.getContexts({
@@ -9,7 +8,6 @@ async function setupOffscreenDocument() {
     });
 
     if (existingContexts.length > 0) {
-        offscreenReady = true;
         return;
     }
 
@@ -19,7 +17,6 @@ async function setupOffscreenDocument() {
             reasons: ['WORKERS'],
             justification: 'Run Stockfish chess engine in a Web Worker'
         });
-        offscreenReady = true;
     } catch (error) {
         console.error('Failed to create offscreen document:', error);
         throw error;
@@ -34,11 +31,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === 'analysis-complete') {
         handleAnalysisComplete(request);
-        return false;
-    }
-
-    if (request.action === 'ping') {
-        sendResponse({ status: 'ok', offscreenReady });
         return false;
     }
 });

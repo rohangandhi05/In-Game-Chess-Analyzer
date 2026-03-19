@@ -3,7 +3,6 @@
 let stockfish = null;
 let currentAnalysis = { moves: [], depth: 0 };
 let analysisCallback = null;
-let isInitialized = false;
 
 function initStockfish() {
     if (stockfish) return;
@@ -20,7 +19,6 @@ function initStockfish() {
             const line = event.data;
 
             if (line === 'readyok') {
-                isInitialized = true;
             }
 
             if (line.startsWith('info depth')) {
