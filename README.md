@@ -2,7 +2,7 @@
 
 > **Disclaimer:** This extension is for **educational, training, and analysis use only**.  
 > Do **not** use it for assistance in rated or competitive games. Using engines during rated games violates Chess.com’s Terms of Service and fair‑play rules.
-
+`https://chromewebstore.google.com/detail/ldejhoellmkjkojgnjmegbjahllohdmj?utm_source=item-share-cb`
 ---
 
 ## Demo
@@ -30,9 +30,7 @@ Everything runs locally in your browser – no moves or positions are sent to a 
 
 ## Installation
 
-- Install the extension from the **Chrome Web Store**.  
-  - (Once your listing is live, put the store URL here, for example: `https://chrome.google.com/webstore/detail/...`.)
-- Ensure it’s **enabled** in `chrome://extensions/`.
+`https://chromewebstore.google.com/detail/ldejhoellmkjkojgnjmegbjahllohdmj?utm_source=item-share-cb `
 
 ---
 
