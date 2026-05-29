@@ -104,6 +104,12 @@ class ChessAnalyzer {
                     <div class="best-move-value">--</div>
                     <div class="best-move-eval neutral">Select your color above</div>
                 </div>
+                <div class="alt-moves-section">
+                    <div class="alt-moves-title">Top 3 Moves</div>
+                    <div class="alt-moves-list">
+                        <div class="alt-moves-placeholder">Waiting for analysis...</div>
+                    </div>
+                </div>
             </div>
         `;
         document.body.appendChild(this.overlay);
@@ -721,17 +727,20 @@ class ChessAnalyzer {
                 if (currentTurn !== this.myColor) {
                     this.updateStatus('waiting');
                     this.updateBestMove('--', 'Opponent\'s Turn', 'neutral');
+                    this.updateAltMoves([]);
                     this.isAnalyzing = false;
                     return;
                 }
             } else {
                 this.updateBestMove('--', 'Select your color', 'neutral');
+                this.updateAltMoves([]);
                 this.isAnalyzing = false;
                 return;
             }
-            
+
             if (this.isGameOver(testChess)) {
                 this.updateBestMove('--', 'Game Over', 'neutral');
+                this.updateAltMoves([]);
                 this.updateStatus('waiting');
                 this.isAnalyzing = false;
                 return;
@@ -748,6 +757,7 @@ class ChessAnalyzer {
         this.isAnalyzing = true;
         this.updateStatus('analyzing');
         this.updateBestMove('--', 'Analyzing...', 'neutral');
+        this.updateAltMoves([]);
 
         try {
             const response = await new Promise((resolve, reject) => {
@@ -836,12 +846,34 @@ class ChessAnalyzer {
     displayAnalysis(moves) {
         if (moves.length === 0) {
             this.updateBestMove('--', 'No moves', 'neutral');
+            this.updateAltMoves([]);
             return;
         }
 
         const bestMove = moves[0];
         const algebraicMove = this.uciToAlgebraic(bestMove.move);
         this.updateBestMove(algebraicMove, bestMove.score, bestMove.scoreClass);
+        this.updateAltMoves(moves);
+    }
+
+    updateAltMoves(moves) {
+        const list = this.overlay.querySelector('.alt-moves-list');
+        if (!list) return;
+
+        if (!moves || moves.length === 0) {
+            list.innerHTML = '<div class="alt-moves-placeholder">Waiting for analysis...</div>';
+            return;
+        }
+
+        list.innerHTML = moves.slice(0, 3).map((m, i) => {
+            const notation = this.uciToAlgebraic(m.move);
+            return `
+                <div class="alt-move-entry${i === 0 ? ' alt-move-best' : ''}">
+                    <span class="alt-move-rank">${i + 1}</span>
+                    <span class="alt-move-notation">${notation}</span>
+                    <span class="alt-move-score ${m.scoreClass}">${m.score}</span>
+                </div>`;
+        }).join('');
     }
 
     updateBestMove(move, evaluation, evalClass) {
