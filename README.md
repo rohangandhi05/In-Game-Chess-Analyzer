@@ -1,77 +1,87 @@
 # Chess Real-Time Analyzer
 
-> **Disclaimer:** This extension is for **educational, training, and analysis use only**.  
-> Do **not** use it for assistance in rated or competitive games. Using engines during rated games violates Chess.com’s Terms of Service and fair‑play rules.
-https://chromewebstore.google.com/detail/ldejhoellmkjkojgnjmegbjahllohdmj?utm_source=item-share-cb
----
+<p align="center">
+  <img src="icons/demo-2.png" width="820" alt="The analyzer panel next to a live Chess.com game, suggesting Pawn to d5">
+</p>
 
-## Demo
+A Chrome extension that watches your game on Chess.com and shows what Stockfish would play, in a small panel beside the board. The engine runs inside the browser, so positions never leave your computer.
 
-| | | |
-|:---:|:---:|:---:|
-| ![Overlay on Chess.com](icons/demo-1.png) | ![Analysis in action](icons/demo-2.png) | ![Best move & evaluation](icons/demo-3.png) |
+**[Chrome Web Store](https://chromewebstore.google.com/detail/ldejhoellmkjkojgnjmegbjahllohdmj)** · Chrome 116+
 
-*Screenshots: overlay on a Chess.com game, analysis panel, and best-move display.*
+> Please don't use this in rated games. Engine help breaks Chess.com's fair-play rules and gets accounts closed. It's meant for bot games, casual games, and going over your own play.
 
----
+## Using it
 
-## Overview
+Open a game and tell the panel which side you're on. When it's your move, it shows the best move in plain words ("Knight to f3" rather than `g1f3`), the evaluation, and the next two candidates. On your opponent's move it waits. Press `H` to fold it out of the way.
 
-Chess Real-Time Analyzer is a **Chrome extension** (Manifest V3) for [Chess.com](https://www.chess.com) that:
+<table>
+  <tr>
+    <td width="60%"><img src="icons/demo-1.png" alt="Panel showing the best move and evaluation"></td>
+    <td width="40%"><img src="icons/demo-3.png" alt="Panel collapsed to a small tab"></td>
+  </tr>
+  <tr>
+    <td><sub>Playing Black after 1. e4. Scores are from your side of the board.</sub></td>
+    <td><sub>Collapsed with <code>H</code>.</sub></td>
+  </tr>
+</table>
 
-- Watches your current Chess.com game.
-- Infers the current board position.
-- Runs the position through a local Stockfish engine.
-- Shows a small overlay with the **best move** and **evaluation**, only when it’s **your turn**.
+## How it reads the board
 
-Everything runs locally in your browser – no moves or positions are sent to a backend server.
+Chess.com doesn't offer an API for a game in progress, so the extension works out the position from the page itself. Every piece on the board is a `div` whose class names give its color, type, and square. That's enough to rebuild the board and write it out as a FEN string, which is the format chess engines take as input.
 
----
+<p align="center">
+  <img src="docs/reading-the-board.svg" width="820" alt="Diagram: the class 'piece wn square-63' maps to a white knight on f3, which becomes '5N2' in the FEN string">
+</p>
 
-## Installation
+Some things can't be seen on the board, so they're worked out instead. Whose turn it is comes from counting the moves in the move list. Castling rights come from checking whether each king and rook is still on its starting square.
 
-https://chromewebstore.google.com/detail/ldejhoellmkjkojgnjmegbjahllohdmj?utm_source=item-share-cb
+### When the board can't be read
 
----
+As a fallback, the extension replays the move list from the start. Scraped move text is messy. Clocks, move numbers, and check marks get mixed in, and if the move list draws pieces as icons, the piece letter disappears entirely. Each token is cleaned, then matched against the legal moves in the position:
 
-## Using the extension
+```
+on the page        cleaned    how it's resolved
+──────────────     ───────    ──────────────────────────────────────────
+"1. e4"            e4         plain SAN
+"Nf3 0:42"         Nf3        clock stripped
+"♘xe5+"            xe5        icon lost, so: whichever legal capture lands on e5
+"Rxd4!?"           Rxd4       annotation stripped
+"fd2"              fd2        the piece on the f-file that can reach d2
+```
 
-1. Go to a Chess.com **live game** or **play** page:
-   - `https://www.chess.com/game/live/...`
-   - `https://www.chess.com/play/...`
-2. After the page loads, an **analysis overlay** appears in the top‑right.
-3. Click **White** or **Black** in the overlay to indicate which side you’re playing.
-4. On **your turns**, the overlay will:
-   - Show the **best move** (in chess notation).
-   - Show an **evaluation** (e.g. `+0.8`, `M3`) with color indicating advantage.
-5. Use the **Hide** button if you want to temporarily remove the overlay without disabling the extension.
+To see how well this is working on the current game, run `__chessAnalyzer.runParseCheck()` in the DevTools console. It reports how many moves were replayed and lists any that couldn't be matched.
 
-The popup (clicking the extension icon) shows a simple status and a reminder about educational use only.
+## Running Stockfish in an extension
 
----
+Stockfish runs in a Web Worker, but a Manifest V3 background script can't create one. The extension gets around this by having the service worker open a hidden [offscreen document](https://developer.chrome.com/docs/extensions/reference/api/offscreen) whose only job is to host the engine. Positions go from the page to the service worker to the offscreen document, and the top lines come back the same way.
 
-## General guidelines
+The engine looks at three lines at once and searches to depth 12. It answers early, as soon as all three lines reach depth 8, so the panel keeps up with blitz. Every request is numbered, and an answer arriving after the position has already changed is thrown away rather than shown.
 
-- **Use it on your own games for learning**, review, and experimentation.
-- Prefer **unrated / casual games**, analysis boards, or post‑game review.
-- **Do not** use this or any other engine to gain an unfair advantage in rated or competitive games.
-- Be aware that Chess.com’s fair‑play systems may detect and act on engine‑assisted play.
+## What's in here
 
----
+```
+content.js      reads the board, builds the FEN, draws the panel
+background.js   service worker; owns the offscreen document and passes messages
+offscreen.js    hosts Stockfish in a Web Worker and parses its output
+stockfish.js    Stockfish compiled to WebAssembly
+chess.js        legal-move generation and FEN validation
+overlay.css     panel styles
+popup.*         toolbar popup that says whether the current tab is a game
+```
 
-## High-level internals (for developers)
-git 
-- **Content script (`content.js`)** injects the overlay, reads the board state and game info from the Chess.com page, and requests analysis when it’s your turn.
-- **Background service worker (`background.js`)** manages an offscreen document that can host a Web Worker under Manifest V3.
-- **Offscreen page (`offscreen.html` + `offscreen.js`)** runs **Stockfish** (via `stockfish.js` as a Web Worker) and returns best moves and scores to the content script.
-- **chess.js** is used in the page to validate moves and handle FEN/board logic; Stockfish handles the actual evaluation.
+It only asks for `activeTab`, `tabs`, and `offscreen`, and it only runs on `chess.com`.
 
-If you’re only here to use the extension, you can ignore this section; it’s just a rough map for anyone reading the code.
+## Running from source
 
----
+Clone the repo, open `chrome://extensions`, turn on Developer mode, and choose **Load unpacked** on the folder. There's no build step.
 
-## License & credits
+## Known gaps
 
-- Core engine: **Stockfish**, used under its respective license.
-- Board logic: **chess.js** by jhlywa.
-- This project’s source code is provided as‑is; if you redistribute, make sure you comply with the licenses of Stockfish and chess.js.
+- En passant and the 50-move counter aren't in the FEN, so the engine can overlook an en passant capture.
+- If a king or rook leaves its square and comes back, the extension still thinks castling is allowed.
+- It depends on Chess.com's class names. If they redesign the board, the selectors need updating.
+- Depth 12 is fine for practice but well short of full-strength Stockfish.
+
+## Credits
+
+[Stockfish](https://stockfishchess.org/) (GPL-3.0) via [stockfish.js](https://github.com/niklasf/stockfish.js) by Niklas Fiekas, and [chess.js](https://github.com/jhlywa/chess.js) by Jeff Hlywa.
